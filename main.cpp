@@ -375,7 +375,7 @@ void ExtractFile( FILE *in, uint64_t PartDataOffset, uint64_t FileOffset, uint64
 	fclose( out );
 }
 
-FILE* openApp (uint32_t i)
+FILE* OpenApp (uint32_t i)
 {
 	char str[1024];
 	FILE *f;
@@ -473,7 +473,7 @@ int32_t main( int32_t argc, char*argv[])
 	uint32_t CNTLen;
 	{
 		uint32_t id = bs32(tmd->Contents[0].ID);
-		FILE *f = openApp(id);
+		FILE *f = OpenApp(id);
 		if (f == NULL) {
 			printf("Failed to open content:%02X\n", id );
 			return EXIT_FAILURE;
@@ -573,7 +573,7 @@ int32_t main( int32_t argc, char*argv[])
 			if(!(fe[i].Type & 0x80))
 			{
 
-				FILE *cnt = openApp(ContFileID);
+				FILE *cnt = OpenApp(ContFileID);
 				if( cnt == NULL )
 				{
 					printf("Could not open:\"%08x\"\n", ContFileID );			

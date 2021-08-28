@@ -166,9 +166,8 @@ uint64_t bs64( uint64_t i )
 {
 	return ((uint64_t)(bs32(i&0xFFFFFFFF))<<32) | (bs32(i>>32));
 }
-char *ReadFile( const char *Name, uint32_t *Length )
+char *ReadFile( FILE *in, uint32_t *Length )
 {
-	FILE *in = fopen(Name,"rb");
 	if( in == NULL )
 	{
 		//perror("");
@@ -375,9 +374,37 @@ void ExtractFile( FILE *in, uint64_t PartDataOffset, uint64_t FileOffset, uint64
 	
 	fclose( out );
 }
-int32_t main( int32_t argc, char*argv[])
+
+FILE* openApp (uint32_t i)
 {
 	char str[1024];
+	FILE *f;
+
+	//upper case with app extension
+	sprintf( str, "%08X.app", i );
+	f = fopen(str, "rb");
+	if (f != NULL) return f;
+
+	//lower case with app extension
+	sprintf( str, "%08x.app", i );
+	f = fopen(str, "rb");
+	if (f != NULL) return f;
+
+	//upper case without app extension
+	sprintf( str, "%08X", i );
+	f = fopen(str, "rb");
+	if (f != NULL) return f;
+
+	//lower case without app extension
+	sprintf( str, "%08x", i );
+	f = fopen(str, "rb");
+	if (f != NULL) return f;
+
+	return NULL;
+}
+
+int32_t main( int32_t argc, char*argv[])
+{
 	
 	printf("CDecrypt v 2.0b by crediar\n");
 	printf("CDecrypt modified for linux/macos by creative username\n");
@@ -391,7 +418,7 @@ int32_t main( int32_t argc, char*argv[])
 	}
 
 	uint32_t TMDLen;
-	char *TMD = ReadFile( argv[1], &TMDLen );
+	char *TMD = ReadFile( fopen(argv[1], "rb"), &TMDLen );
 	if( TMD == nullptr )
 	{
 		perror("Failed to open tmd\n");
@@ -399,7 +426,7 @@ int32_t main( int32_t argc, char*argv[])
 	}
 	
 	uint32_t TIKLen;
-	char *TIK = ReadFile( argv[2], &TIKLen );
+	char *TIK = ReadFile( fopen(argv[2], "rb"), &TIKLen );
 	if( TIK == nullptr )
 	{
 		perror("Failed to open cetk\n");
@@ -441,20 +468,18 @@ int32_t main( int32_t argc, char*argv[])
 		
 	char iv[16];
 	memset( iv, 0, sizeof(iv) );
-	
-	sprintf( str, "%08X.app", bs32(tmd->Contents[0].ID) );
-	
+
+	char *CNT;
 	uint32_t CNTLen;
-	char *CNT = ReadFile( str, &CNTLen );
-	if( CNT == (char*)NULL )
 	{
-		sprintf( str, "%08X", bs32(tmd->Contents[0].ID) );
-		CNT = ReadFile( str, &CNTLen );
-		if( CNT == (char*)NULL )
-		{
-			printf("Failed to open content:%02X\n", bs32(tmd->Contents[0].ID) );
+		uint32_t id = bs32(tmd->Contents[0].ID);
+		FILE *f = openApp(id);
+		if (f == NULL) {
+			printf("Failed to open content:%02X\n", id );
 			return EXIT_FAILURE;
 		}
+
+		CNT = ReadFile(f, &CNTLen);
 	}
 
 	if( bs64(tmd->Contents[0].Size) != (uint64_t)CNTLen )
@@ -467,6 +492,7 @@ int32_t main( int32_t argc, char*argv[])
 
 	if( bs32(*(uint32_t*)CNT) != 0x46535400 )
 	{
+		char str[1024];
 		sprintf( str, "%08X.dec", bs32(tmd->Contents[0].ID) );
 		FileDump( str, CNT, CNTLen );
 		return EXIT_FAILURE;
@@ -524,7 +550,7 @@ int32_t main( int32_t argc, char*argv[])
 				if(j)
 					Path[strlen(Path)] = '/';
 				memcpy( Path+strlen(Path), CNT + NameOff + bs24( fe[Entry[j]].NameOffset), strlen(CNT + NameOff + bs24( fe[Entry[j]].NameOffset) ) );
-				printf("making dir: %s", Path);
+				printf("making dir: %s\n", Path);
 				mkdir(Path, 0777);
 			}
 			if(level)
@@ -543,22 +569,18 @@ int32_t main( int32_t argc, char*argv[])
 
 			uint32_t ContFileID = bs32(tmd->Contents[bs16(fe[i].ContentID)].ID);
 			
-			sprintf( str, "%08X.app", ContFileID );
 
 			if(!(fe[i].Type & 0x80))
 			{
-				FILE *cnt = fopen( str, "rb" );
+
+				FILE *cnt = openApp(ContFileID);
 				if( cnt == NULL )
 				{
-					sprintf( str, "%08X", ContFileID );
-					cnt = fopen( str, "rb" );
-					if( cnt == NULL )
-					{
-						printf("Could not open:\"%s\"\n", str );			
-						perror("");
-						return EXIT_FAILURE;
-					}
+					printf("Could not open:\"%08x\"\n", ContFileID );			
+					perror("");
+					return EXIT_FAILURE;
 				}
+
 				if( (bs16(fe[i].Flags) & 0x440) )
 				{
 					ExtractFileHash( cnt, 0, CNTOff, bs32(fe[i].FileLength), Path, bs16(fe[i].ContentID) );
